@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_dayflow_root" name="Dayflow HRMS" sequence="10"/>
+
+    <!-- Dashboard shortcuts -->
+    <menuitem id="menu_dayflow_my_profile" name="My Profile"
+              parent="menu_dayflow_root" action="action_dayflow_my_profile"
+              sequence="5"/>
+
+    <!-- Employees (Admin) -->
+    <menuitem id="menu_dayflow_employees" name="Employees"
+              parent="menu_dayflow_root" action="action_dayflow_employees"
+              sequence="10" groups="dayflow_hrms.group_dayflow_admin"/>
+
+    <!-- Attendance -->
+    <menuitem id="menu_dayflow_attendance_root" name="Attendance"
+              parent="menu_dayflow_root" sequence="20"/>
+    <menuitem id="menu_dayflow_attendance" name="Attendance Records"
+              parent="menu_dayflow_attendance_root" action="action_dayflow_attendance"
+              sequence="10"/>
+
+    <!-- Leave & Time-Off -->
+    <menuitem id="menu_dayflow_leave_root" name="Leave &amp; Time-Off"
+              parent="menu_dayflow_root" sequence="30"/>
+    <menuitem id="menu_dayflow_leave_my" name="Leave Requests"
+              parent="menu_dayflow_leave_root" action="action_dayflow_leave_request"
+              sequence="10"/>
+    <menuitem id="menu_dayflow_leave_approvals" name="Approvals"
+              parent="menu_dayflow_leave_root" action="action_dayflow_leave_approvals"
+              sequence="20" groups="dayflow_hrms.group_dayflow_admin"/>
+
+    <!-- Payroll (Admin) -->
+    <menuitem id="menu_dayflow_payroll" name="Payroll"
+              parent="menu_dayflow_root" action="action_dayflow_payroll"
+              sequence="40" groups="dayflow_hrms.group_dayflow_admin"/>
+
+</odoo>
