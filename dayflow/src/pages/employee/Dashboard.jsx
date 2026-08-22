@@ -68,22 +68,24 @@ const Dashboard = () => {
   const [checkingIn, setCheckingIn] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     setCheckingIn(true)
     const time = formatTime(new Date())
-    setTimeout(() => {
-      checkIn(currentUser.id, today, time)
+    try {
+      await checkIn(currentUser.id, today, time)
+    } finally {
       setCheckingIn(false)
-    }, 600)
+    }
   }
 
-  const handleCheckOut = () => {
+  const handleCheckOut = async () => {
     setCheckingOut(true)
     const time = formatTime(new Date())
-    setTimeout(() => {
-      checkOut(currentUser.id, today, time)
+    try {
+      await checkOut(currentUser.id, today, time)
+    } finally {
       setCheckingOut(false)
-    }, 600)
+    }
   }
 
   const quickCards = [

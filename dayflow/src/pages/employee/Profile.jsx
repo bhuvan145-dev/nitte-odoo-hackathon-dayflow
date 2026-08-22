@@ -57,15 +57,16 @@ const Profile = () => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true)
-    setTimeout(() => {
+    try {
       const updates = {}
       editableFields.forEach(f => { updates[f] = formData[f] })
-      updateProfile(updates)
+      await updateProfile({ ...currentUser, ...updates })
       setEditing(false)
+    } finally {
       setSaving(false)
-    }, 500)
+    }
   }
 
   const handleAvatarUpload = (e) => {

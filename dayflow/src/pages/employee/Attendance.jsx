@@ -108,22 +108,24 @@ const Attendance = () => {
     ].filter(d => d.value > 0)
   }, [stats])
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     setCheckingIn(true)
     const time = format(today, 'hh:mm a')
-    setTimeout(() => {
-      checkIn(currentUser.id, todayStr, time)
+    try {
+      await checkIn(currentUser.id, todayStr, time)
+    } finally {
       setCheckingIn(false)
-    }, 500)
+    }
   }
 
-  const handleCheckOut = () => {
+  const handleCheckOut = async () => {
     setCheckingOut(true)
     const time = format(today, 'hh:mm a')
-    setTimeout(() => {
-      checkOut(currentUser.id, todayStr, time)
+    try {
+      await checkOut(currentUser.id, todayStr, time)
+    } finally {
       setCheckingOut(false)
-    }, 500)
+    }
   }
 
   const totalWorkedDays = (stats.Present || 0) + (stats['Half-day'] || 0) * 0.5

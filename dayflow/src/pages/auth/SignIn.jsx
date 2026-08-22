@@ -25,19 +25,20 @@ const SignIn = () => {
     if (error) setError('')
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    setTimeout(() => {
-      const res = signIn(form.email, form.password)
+    try {
+      const res = await signIn(form.email, form.password)
       if (res.success) {
         navigate(res.user.role === 'HR' ? '/admin/dashboard' : '/dashboard')
       } else {
         setError(res.error)
       }
+    } finally {
       setLoading(false)
-    }, 500)
+    }
   }
 
   return (

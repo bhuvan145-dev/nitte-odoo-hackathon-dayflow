@@ -44,20 +44,21 @@ const SignUp = () => {
     return Object.keys(errs).length === 0
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
     setLoading(true)
-    setTimeout(() => {
-      const res = signUp(form)
+    try {
+      const res = await signUp(form)
       if (res.success) {
         setSuccess('Account created! Redirecting to sign in...')
         setTimeout(() => navigate('/signin'), 1500)
       } else {
         setErrors({ email: res.error })
       }
+    } finally {
       setLoading(false)
-    }, 600)
+    }
   }
 
   return (

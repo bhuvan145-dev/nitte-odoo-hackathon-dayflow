@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext.jsx'
-import { generateDefaultLeaveRequests, generateDefaultAttendance } from '../data/mockData.js'
-import { generateId } from '../utils/helpers.js'
+import {
+  apiGetLeaves, apiApplyLeave, apiUpdateLeaveStatus, apiGetLeaveBalance,
+  apiGetAttendance, apiCheckIn, apiCheckOut,
+} from '../services/api.js'
 
 const DataContext = createContext()
 
@@ -11,125 +13,85 @@ export const useData = () => {
   return context
 }
 
-const LEAVES_KEY = 'dayflow_leaves'
-const ATTENDANCE_KEY = 'dayflow_attendance'
-
 export const DataProvider = ({ children }) => {
-  const { users } = useAuth()
+  const { currentUser, users, refreshUsers } = useAuth()
   const [leaveRequests, setLeaveRequests] = useState([])
   const [attendanceRecords, setAttendanceRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const loadAll = async () => {
+    setLoading(true)
+    try {
+      const [lv, at] = await Promise.all([
+        apiGetLeaves().catch(() => []),
+        apiGetAttendance().catch(() => []),
+      ])
+      setLeaveRequests(lv)
+      setAttendanceRecords(at)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (users.length === 0) return
+    loadAll()
+  }, [currentUser?.id, users.length])
 
-    const storedLeaves = localStorage.getItem(LEAVES_KEY)
-    if (!storedLeaves) {
-      const defaults = generateDefaultLeaveRequests(users)
-      localStorage.setItem(LEAVES_KEY, JSON.stringify(defaults))
-      setLeaveRequests(defaults)
-    } else {
-      setLeaveRequests(JSON.parse(storedLeaves))
+  const applyLeave = async (data, employeeId, employeeName) => {
+    const r = await apiApplyLeave(data, employeeId, employeeName)
+    if (r) {
+      setLeaveRequests(prev => [r, ...prev.filter(x => x.id !== r.id)])
+      refreshUsers()
     }
+    return r
+  }
 
-    const storedAttendance = localStorage.getItem(ATTENDANCE_KEY)
-    if (!storedAttendance) {
-      const defaults = generateDefaultAttendance(users)
-      localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(defaults))
-      setAttendanceRecords(defaults)
-    } else {
-      setAttendanceRecords(JSON.parse(storedAttendance))
+  const updateLeaveStatus = async (leaveId, status, comment = null) => {
+    const r = await apiUpdateLeaveStatus(leaveId, status, comment)
+    if (r) {
+      setLeaveRequests(prev => prev.map(l => l.id === leaveId ? r : l))
+      refreshUsers()
+      loadAll()
     }
-  }, [users.length])
-
-  const updateLeavesStorage = (newLeaves) => {
-    localStorage.setItem(LEAVES_KEY, JSON.stringify(newLeaves))
-    setLeaveRequests(newLeaves)
+    return r
   }
 
-  const updateAttendanceStorage = (newRecords) => {
-    localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(newRecords))
-    setAttendanceRecords(newRecords)
-  }
+  const getLeavesForEmployee = (employeeId) =>
+    leaveRequests.filter(l => String(l.employeeId) === String(employeeId))
 
-  const applyLeave = (data, employeeId, employeeName) => {
-    const newRequest = {
-      id: generateId(),
-      employeeId,
-      employeeName,
-      status: 'Pending',
-      adminComments: null,
-      createdAt: new Date().toISOString().split('T')[0],
-      ...data
+  const getPendingLeaves = () =>
+    leaveRequests.filter(l => l.status === 'Pending')
+
+  const getAttendanceForEmployee = (employeeId) =>
+    attendanceRecords.filter(a => String(a.employeeId) === String(employeeId))
+
+  const getAttendanceForDate = (employeeId, date) =>
+    attendanceRecords.find(a => String(a.employeeId) === String(employeeId) && a.date === date)
+
+  const checkIn = async (employeeId, date, time) => {
+    const r = await apiCheckIn(employeeId, date, time)
+    if (r) {
+      setAttendanceRecords(prev => {
+        const idx = prev.findIndex(a => a.id === r.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = r
+          return next
+        }
+        return [r, ...prev]
+      })
+      refreshUsers()
     }
-    const newLeaves = [newRequest, ...leaveRequests]
-    updateLeavesStorage(newLeaves)
-    return newRequest
+    return r
   }
 
-  const updateLeaveStatus = (leaveId, status, comment = null) => {
-    const newLeaves = leaveRequests.map(l =>
-      l.id === leaveId
-        ? { ...l, status, adminComments: comment || l.adminComments }
-        : l
-    )
-    updateLeavesStorage(newLeaves)
-    return newLeaves.find(l => l.id === leaveId)
-  }
-
-  const getLeavesForEmployee = (employeeId) => {
-    return leaveRequests.filter(l => l.employeeId === employeeId)
-  }
-
-  const getPendingLeaves = () => {
-    return leaveRequests.filter(l => l.status === 'Pending')
-  }
-
-  const getAttendanceForEmployee = (employeeId) => {
-    return attendanceRecords.filter(a => a.employeeId === employeeId)
-  }
-
-  const getAttendanceForDate = (employeeId, date) => {
-    return attendanceRecords.find(a => a.employeeId === employeeId && a.date === date)
-  }
-
-  const checkIn = (employeeId, date, time) => {
-    const existing = getAttendanceForDate(employeeId, date)
-    if (existing) {
-      const updated = attendanceRecords.map(a =>
-        a.id === existing.id ? { ...a, checkIn: time, status: 'Present' } : a
-      )
-      updateAttendanceStorage(updated)
-      return updated.find(a => a.id === existing.id)
+  const checkOut = async (employeeId, date, time) => {
+    const r = await apiCheckOut(employeeId, date, time)
+    if (r) {
+      setAttendanceRecords(prev => prev.map(a => a.id === r.id ? r : a))
+      refreshUsers()
     }
-    const newRecord = {
-      id: generateId(),
-      employeeId,
-      date,
-      status: 'Present',
-      checkIn: time,
-      checkOut: null,
-      hoursWorked: 0
-    }
-    const newRecords = [newRecord, ...attendanceRecords]
-    updateAttendanceStorage(newRecords)
-    return newRecord
-  }
-
-  const checkOut = (employeeId, date, time) => {
-    const existing = getAttendanceForDate(employeeId, date)
-    if (!existing) return null
-    const updated = attendanceRecords.map(a => {
-      if (a.id === existing.id) {
-        const checkInDate = new Date(`${a.date} ${a.checkIn}`)
-        const checkOutDate = new Date(`${a.date} ${time}`)
-        const hours = Math.max(0, (checkOutDate - checkInDate) / (1000 * 60 * 60))
-        const status = hours < 4 ? 'Half-day' : hours >= 4 ? 'Present' : a.status
-        return { ...a, checkOut: time, hoursWorked: parseFloat(hours.toFixed(2)), status }
-      }
-      return a
-    })
-    updateAttendanceStorage(updated)
-    return updated.find(a => a.id === existing.id)
+    return r
   }
 
   const getAttendanceStats = (employeeId) => {
@@ -139,28 +101,16 @@ export const DataProvider = ({ children }) => {
     return stats
   }
 
-  const getLeaveBalance = (employeeId) => {
-    const balances = {
-      'Paid Leave': { total: 15, used: 0 },
-      'Sick Leave': { total: 10, used: 0 },
-      'Unpaid Leave': { total: 30, used: 0 },
-      'Casual Leave': { total: 12, used: 0 }
-    }
-    const approved = leaveRequests.filter(
-      l => l.employeeId === employeeId && l.status === 'Approved'
-    )
-    approved.forEach(l => {
-      if (balances[l.leaveType]) {
-        balances[l.leaveType].used += l.days
-      }
-    })
-    return balances
+  const getLeaveBalance = async (employeeId) => {
+    return apiGetLeaveBalance(employeeId)
   }
 
   return (
     <DataContext.Provider value={{
       leaveRequests,
       attendanceRecords,
+      loading,
+      reload: loadAll,
       applyLeave,
       updateLeaveStatus,
       getLeavesForEmployee,

@@ -85,9 +85,9 @@ const LeaveApprovals = () => {
     setComment(c => ({ ...c, [id]: '' }))
   }
 
-  const doAction = (leave, status) => {
+  const doAction = async (leave, status) => {
     const text = comment[leave.id]?.trim() || null
-    updateLeaveStatus(leave.id, status, text)
+    await updateLeaveStatus(leave.id, status, text)
     closeComment(leave.id)
     showToast(`Leave ${status.toLowerCase()} successfully`)
   }

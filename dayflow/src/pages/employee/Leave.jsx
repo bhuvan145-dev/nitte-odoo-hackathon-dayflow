@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CalendarClock,
@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useData } from '../../context/DataContext.jsx'
 import { formatDate } from '../../utils/helpers.js'
-import { leaveTypes } from '../../data/mockData.js'
+import { leaveTypes, leaveBalancesTemplate } from '../../data/mockData.js'
 import { cn } from '../../utils/cn.js'
 import { format, differenceInDays, addDays } from 'date-fns'
 
@@ -50,10 +50,21 @@ const itemVariants = {
 const Leave = () => {
   const { currentUser } = useAuth()
   const { getLeaveBalance, getLeavesForEmployee, applyLeave } = useData()
-  const balance = getLeaveBalance(currentUser?.id)
+  const [balance, setBalance] = useState(() => JSON.parse(JSON.stringify(leaveBalancesTemplate)))
+  const [balanceLoading, setBalanceLoading] = useState(true)
   const myLeaves = getLeavesForEmployee(currentUser?.id).sort(
     (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
   )
+
+  useEffect(() => {
+    if (!currentUser?.id) return
+    let active = true
+    setBalanceLoading(true)
+    getLeaveBalance(currentUser.id)
+      .then(b => { if (active) setBalance(b) })
+      .finally(() => { if (active) setBalanceLoading(false) })
+    return () => { active = false }
+  }, [currentUser?.id, applyLeave.length, myLeaves.length])
 
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -94,12 +105,12 @@ const Leave = () => {
     return Object.keys(errs).length === 0
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!validateForm()) return
     setSubmitting(true)
-    setTimeout(() => {
-      applyLeave(
+    try {
+      await applyLeave(
         {
           leaveType: formData.leaveType,
           startDate: formData.startDate,
@@ -110,16 +121,21 @@ const Leave = () => {
         currentUser.id,
         currentUser.name
       )
+      if (currentUser?.id) {
+        const b = await getLeaveBalance(currentUser.id)
+        setBalance(b)
+      }
+    } finally {
       setSubmitting(false)
-      setShowForm(false)
-      setFormData({
-        leaveType: 'Paid Leave',
-        startDate: format(new Date(), 'yyyy-MM-dd'),
-        endDate: format(new Date(), 'yyyy-MM-dd'),
-        remarks: ''
-      })
-      setErrors({})
-    }, 500)
+    }
+    setShowForm(false)
+    setFormData({
+      leaveType: 'Paid Leave',
+      startDate: format(new Date(), 'yyyy-MM-dd'),
+      endDate: format(new Date(), 'yyyy-MM-dd'),
+      remarks: ''
+    })
+    setErrors({})
   }
 
   const handleChange = (field, value) => {

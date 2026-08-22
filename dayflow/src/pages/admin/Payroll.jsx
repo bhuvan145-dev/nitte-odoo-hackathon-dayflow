@@ -132,13 +132,13 @@ const Payroll = () => {
     setEditCTC('')
   }
 
-  const saveSalary = () => {
+  const saveSalary = async () => {
     const val = Number(editCTC)
     if (isNaN(val) || val < 0) {
       showToast('Enter a valid CTC', 'error')
       return
     }
-    updateSalary(editModalOpen.emp.id, val)
+    await updateSalary(editModalOpen.emp.id, val)
     closeEdit()
     showToast('Salary updated successfully')
   }

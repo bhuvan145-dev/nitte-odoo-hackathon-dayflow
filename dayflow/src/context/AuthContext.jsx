@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { defaultUsers } from '../data/mockData.js'
+import {
+  apiSignIn, apiSignUp, apiGetCurrentUser, apiSignOut,
+  apiUpdateProfile, apiUpdateEmployee, apiGetAllUsers,
+  checkOdooAvailable, dataMode
+} from '../services/api.js'
 
 const AuthContext = createContext()
 
@@ -9,114 +13,89 @@ export const useAuth = () => {
   return context
 }
 
-const STORAGE_KEY = 'dayflow_auth'
-const USERS_KEY = 'dayflow_users'
-
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [backendStatus, setBackendStatus] = useState({ mode: 'local', odooVersion: null, checked: false })
 
   useEffect(() => {
-    const storedUsers = localStorage.getItem(USERS_KEY)
-    if (!storedUsers) {
-      localStorage.setItem(USERS_KEY, JSON.stringify(defaultUsers))
-      setUsers(defaultUsers)
-    } else {
-      setUsers(JSON.parse(storedUsers))
+    const init = async () => {
+      const avail = await checkOdooAvailable()
+      setBackendStatus({
+        mode: avail.available ? 'odoo' : 'local',
+        odooVersion: avail.version,
+        checked: true,
+      })
+      const stored = apiGetCurrentUser()
+      if (stored) setCurrentUser(stored)
+      const all = await apiGetAllUsers()
+      if (all.length) setUsers(all)
+      setLoading(false)
     }
-
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      setCurrentUser(JSON.parse(stored))
-    }
-    setLoading(false)
+    init()
   }, [])
 
-  const updateUsersStorage = (newUsers) => {
-    localStorage.setItem(USERS_KEY, JSON.stringify(newUsers))
-    setUsers(newUsers)
+  const signUp = async (data) => {
+    const res = await apiSignUp(data)
+    if (res.success) {
+      const all = await apiGetAllUsers()
+      setUsers(all)
+    }
+    return res
   }
 
-  const signUp = ({ employeeId, name, email, password, role, phone }) => {
-    const existingEmail = users.find(u => u.email.toLowerCase() === email.toLowerCase())
-    if (existingEmail) {
-      return { success: false, error: 'Email is already registered' }
+  const signIn = async (email, password) => {
+    const res = await apiSignIn(email, password)
+    if (res.success) {
+      setCurrentUser(res.user)
+      const all = await apiGetAllUsers()
+      setUsers(all)
     }
-    const existingEmpId = users.find(u => u.employeeId.toUpperCase() === employeeId.toUpperCase())
-    if (existingEmpId) {
-      return { success: false, error: 'Employee ID already exists' }
-    }
-    const newUser = {
-      id: `emp-${Date.now()}`,
-      employeeId: employeeId.toUpperCase(),
-      name,
-      email,
-      password,
-      role: role || 'Employee',
-      phone: phone || '',
-      address: '',
-      dob: '',
-      gender: '',
-      department: role === 'HR' ? 'Human Resources' : 'Engineering',
-      designation: role === 'HR' ? 'HR Executive' : 'Software Engineer',
-      joiningDate: new Date().toISOString().split('T')[0],
-      salary: 500000,
-      profilePicture: null,
-      createdAt: new Date().toISOString().split('T')[0]
-    }
-    const newUsers = [...users, newUser]
-    updateUsersStorage(newUsers)
-    return { success: true, user: newUser }
-  }
-
-  const signIn = (email, password) => {
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase())
-    if (!user) {
-      return { success: false, error: 'Email not found' }
-    }
-    if (user.password !== password) {
-      return { success: false, error: 'Incorrect password' }
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-    setCurrentUser(user)
-    return { success: true, user }
+    return res
   }
 
   const signOut = () => {
-    localStorage.removeItem(STORAGE_KEY)
+    apiSignOut()
     setCurrentUser(null)
   }
 
-  const updateProfile = (updatedUser) => {
-    const newUsers = users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u)
-    updateUsersStorage(newUsers)
-    if (currentUser && currentUser.id === updatedUser.id) {
-      const newCurrent = { ...currentUser, ...updatedUser }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newCurrent))
-      setCurrentUser(newCurrent)
+  const updateProfile = async (updatedUser) => {
+    const u = await apiUpdateProfile(updatedUser)
+    if (u) {
+      setCurrentUser(u)
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...u } : x))
     }
-    return newUsers.find(u => u.id === updatedUser.id)
+    return u
   }
 
-  const updateEmployee = (employeeId, updates) => {
-    const newUsers = users.map(u => u.id === employeeId ? { ...u, ...updates } : u)
-    updateUsersStorage(newUsers)
-    return newUsers.find(u => u.id === employeeId)
+  const updateEmployee = async (employeeId, updates) => {
+    const u = await apiUpdateEmployee(employeeId, updates)
+    if (u) setUsers(prev => prev.map(x => x.id === employeeId ? { ...x, ...updates } : x))
+    return u
   }
 
-  const updateSalary = (employeeId, newSalary) => {
+  const updateSalary = async (employeeId, newSalary) => {
     return updateEmployee(employeeId, { salary: newSalary })
   }
 
   const isHR = () => currentUser?.role === 'HR'
   const isEmployee = () => currentUser?.role === 'Employee'
 
+  const refreshUsers = async () => {
+    const all = await apiGetAllUsers()
+    setUsers(all)
+    return all
+  }
+
   return (
     <AuthContext.Provider value={{
       currentUser,
       users,
       loading,
+      backendStatus,
+      dataMode,
+      refreshUsers,
       signUp,
       signIn,
       signOut,
