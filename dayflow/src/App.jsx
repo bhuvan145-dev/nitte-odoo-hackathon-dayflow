@@ -50,7 +50,7 @@ const wrapPage = (Component) => {
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AnimatePresence mode="wait">
         <Routes>
           <Route path="/signin" element={wrapPage(SignIn)} />
