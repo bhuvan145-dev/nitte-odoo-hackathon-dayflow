@@ -4,8 +4,11 @@
     <menuitem id="menu_dayflow_root" name="Dayflow HRMS" sequence="10"/>
 
     <!-- Dashboard shortcuts -->
-    <menuitem id="menu_dayflow_my_profile" name="My Profile"
-              parent="menu_dayflow_root" action="action_dayflow_my_profile"
+    <menuitem id="menu_dayflow_dashboard_admin" name="Dashboard"
+              parent="menu_dayflow_root" action="action_dayflow_dashboard_admin"
+              sequence="1" groups="dayflow_hrms.group_dayflow_admin"/>
+    <menuitem id="menu_dayflow_my_profile" name="My Dashboard"
+              parent="menu_dayflow_root" action="action_dayflow_dashboard_employee"
               sequence="5"/>
 
     <!-- Employees (Admin) -->

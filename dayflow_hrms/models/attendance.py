@@ -83,3 +83,18 @@ class DayflowAttendance(models.Model):
             'employee_id': employee.id,
             'check_in': fields.Datetime.now(),
         })
+
+    @api.model
+    def dayflow_quick_check_out(self):
+        """Companion to dayflow_quick_check_in: stamps check-out on
+        today's open record for the current user."""
+        employee = self.env.user.employee_id
+        if not employee:
+            raise UserError("No employee record is linked to your user account.")
+        today = fields.Date.context_today(self)
+        record = self.search(
+            [('employee_id', '=', employee.id), ('date', '=', today)], limit=1)
+        if not record or not record.check_in:
+            raise UserError("You need to check in first.")
+        record.action_check_out()
+        return record

@@ -14,11 +14,11 @@
                             <field name="dayflow_code"/>
                             <field name="dayflow_role"/>
                         </group>
-                        <group string="Payroll" groups="dayflow_hrms.group_dayflow_admin">
+                        <group string="Payroll">
                             <field name="currency_id" invisible="1"/>
-                            <field name="dayflow_salary"/>
-                            <field name="dayflow_bank_account"/>
-                            <field name="dayflow_pan"/>
+                            <field name="dayflow_salary" readonly="1"/>
+                            <field name="dayflow_bank_account" readonly="1"/>
+                            <field name="dayflow_pan" readonly="1"/>
                         </group>
                     </group>
                     <group string="Documents">
@@ -57,7 +57,7 @@
     <record id="action_dayflow_employees" model="ir.actions.act_window">
         <field name="name">Employees</field>
         <field name="res_model">hr.employee</field>
-        <field name="view_mode">list,kanban,form</field>
+        <field name="view_mode">tree,kanban,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Add your first employee to Dayflow.
@@ -73,11 +73,56 @@
         <field name="domain">[('user_id', '=', uid)]</field>
     </record>
 
-    <!-- Payroll action (Admin): same model, framed around salary control -->
+    <!-- Payroll action (Admin): dedicated editable payroll views -->
+    <record id="view_hr_employee_payroll_list" model="ir.ui.view">
+        <field name="name">hr.employee.payroll.list</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <tree string="Payroll" editable="bottom">
+                <field name="name"/>
+                <field name="dayflow_code"/>
+                <field name="job_title"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="dayflow_salary" sum="Total Monthly Payroll"/>
+                <field name="dayflow_bank_account"/>
+                <field name="dayflow_pan"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_hr_employee_payroll_form" model="ir.ui.view">
+        <field name="name">hr.employee.payroll.form</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <form string="Payroll">
+                <sheet>
+                    <group>
+                        <group string="Employee">
+                            <field name="name"/>
+                            <field name="dayflow_code"/>
+                            <field name="job_title"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="department_id"/>
+                        </group>
+                        <group string="Salary Structure">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="dayflow_salary"/>
+                            <field name="dayflow_bank_account"/>
+                            <field name="dayflow_pan"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
     <record id="action_dayflow_payroll" model="ir.actions.act_window">
         <field name="name">Payroll</field>
         <field name="res_model">hr.employee</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_hr_employee_payroll_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_hr_employee_payroll_form')})]"/>
     </record>
 
 </odoo>

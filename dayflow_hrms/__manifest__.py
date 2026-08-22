@@ -27,6 +27,7 @@ PostgreSQL via the ORM) - no external frontend stack.
         'security/ir.model.access.csv',
         'data/dayflow_sequence.xml',
         'views/employee_views.xml',
+        'views/dashboard_views.xml',
         'views/attendance_views.xml',
         'views/leave_views.xml',
         'views/menus.xml',

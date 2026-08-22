@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- Employee Dashboard: quick-access cards on their own profile  -->
+    <!-- ============================================================ -->
+    <record id="view_employee_form_dashboard_inherit" model="ir.ui.view">
+        <field name="name">hr.employee.form.dayflow.dashboard</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="dayflow_hrms.view_employee_form_dayflow_inherit"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='dayflow']" position="before">
+                <page string="Dashboard" name="dayflow_dashboard">
+                    <div class="oe_button_box" name="dayflow_button_box">
+                        <button name="action_dayflow_check_in_out" type="object"
+                                class="oe_stat_button" icon="fa-clock-o">
+                            <field name="dayflow_is_checked_in" widget="boolean_button"
+                                   true_label="Check Out" false_label="Check In"/>
+                        </button>
+                        <button name="action_dayflow_view_attendance" type="object"
+                                class="oe_stat_button" icon="fa-calendar-check-o">
+                            <field name="dayflow_attendance_count" widget="statinfo" string="Attendance"/>
+                        </button>
+                        <button name="action_dayflow_view_leaves" type="object"
+                                class="oe_stat_button" icon="fa-plane">
+                            <field name="dayflow_leave_count" widget="statinfo" string="Leave Requests"/>
+                        </button>
+                        <button name="action_dayflow_view_pending_leaves" type="object"
+                                class="oe_stat_button" icon="fa-hourglass-half">
+                            <field name="dayflow_pending_leave_count" widget="statinfo" string="Pending"/>
+                        </button>
+                    </div>
+                    <group>
+                        <group string="Today">
+                            <field name="dayflow_today_check_in"/>
+                            <field name="dayflow_today_check_out"/>
+                            <field name="dayflow_today_worked_hours"/>
+                        </group>
+                        <group string="Alerts">
+                            <field name="dayflow_alerts" nolabel="1" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Dashboard action for employees: opens own profile, lands on Dashboard tab -->
+    <record id="action_dayflow_dashboard_employee" model="ir.actions.act_window">
+        <field name="name">My Dashboard</field>
+        <field name="res_model">hr.employee</field>
+        <field name="view_mode">form</field>
+        <field name="domain">[('user_id', '=', uid)]</field>
+        <field name="context">{'form_view_initial_mode': 'edit'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No employee profile is linked to your account yet.
+            </p>
+            <p>
+                Ask your HR Officer to link your user to an employee record.
+            </p>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Admin / HR Dashboard: kanban of employees + approvals entry  -->
+    <!-- ============================================================ -->
+    <record id="view_employee_admin_kanban" model="ir.ui.view">
+        <field name="name">hr.employee.kanban.dayflow.admin</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" create="1">
+                <field name="name"/>
+                <field name="dayflow_code"/>
+                <field name="job_title"/>
+                <field name="work_email"/>
+                <field name="dayflow_salary"/>
+                <field name="dayflow_attendance_count"/>
+                <field name="dayflow_leave_count"/>
+                <field name="dayflow_pending_leave_count"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex flex-column p-2 gap-2 h-100">
+                            <div class="d-flex align-items-center gap-2">
+                                <strong t-esc="record.name.value"/>
+                                <span class="text-muted ms-auto small" t-esc="record.dayflow_code.value"/>
+                            </div>
+                            <div class="text-muted small" t-esc="record.job_title.value or record.work_email.value or ''"/>
+                            <div class="d-flex gap-2 flex-wrap small">
+                                <span class="badge text-bg-secondary" t-esc="'Att: ' + (record.dayflow_attendance_count.raw_value or 0)"/>
+                                <span class="badge text-bg-info" t-esc="'Leaves: ' + (record.dayflow_leave_count.raw_value or 0)"/>
+                                <span class="badge text-bg-warning" t-esc="'Pending: ' + (record.dayflow_pending_leave_count.raw_value or 0)"/>
+                            </div>
+                            <div class="mt-auto d-flex justify-content-between small" t-if="record.dayflow_salary.raw_value !== undefined">
+                                <span class="text-muted">Monthly Salary</span>
+                                <strong t-esc="record.dayflow_salary.value or '-'"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Admin dashboard search: focus on pending approvals -->
+    <record id="view_dayflow_leave_approvals_search" model="ir.ui.view">
+        <field name="name">dayflow.leave.request.search.approvals</field>
+        <field name="model">dayflow.leave.request</field>
+        <field name="arch" type="xml">
+            <search string="Leave Approvals">
+                <field name="employee_id"/>
+                <field name="leave_type"/>
+                <filter string="To Approve" name="to_approve" domain="[('state', '=', 'pending')]"/>
+                <filter string="Approved" name="approved" domain="[('state', '=', 'approved')]"/>
+                <filter string="Rejected" name="rejected" domain="[('state', '=', 'rejected')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Employee" name="group_employee" context="{'group_by': 'employee_id'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Leave Type" name="group_type" context="{'group_by': 'leave_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Admin dashboard action: employee cards; switch between employees by opening a card -->
+    <record id="action_dayflow_dashboard_admin" model="ir.actions.act_window">
+        <field name="name">HR Dashboard</field>
+        <field name="res_model">hr.employee</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="hr.view_employee_filter"/>
+        <field name="context">{'search_default_group_department': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No employees yet.
+            </p>
+            <p>
+                Create an employee card per person to start tracking attendance,
+                leave and payroll in Dayflow.
+            </p>
+        </field>
+    </record>
+
+</odoo>

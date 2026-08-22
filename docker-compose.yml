@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    volumes:
+      - dayflow_db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  odoo:
+    image: odoo:17
+    depends_on:
+      - db
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    volumes:
+      - ./dayflow_hrms:/mnt/extra-addons/dayflow_hrms
+      - dayflow_web:/var/lib/odoo
+    command: >
+      odoo -d dayflow --db-filter=^dayflow$$
+      --addons-path=/mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+      --load-language=en_US
+    restart: unless-stopped
+
+volumes:
+  dayflow_db:
+  dayflow_web:
