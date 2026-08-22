@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import {
   apiSignIn, apiSignUp, apiGetCurrentUser, apiSignOut,
   apiUpdateProfile, apiUpdateEmployee, apiGetAllUsers,
-  checkOdooAvailable, dataMode
+  checkOdooAvailable, checkExpressAvailable, dataMode
 } from '../services/api.js'
 
 const AuthContext = createContext()
@@ -21,10 +21,18 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const init = async () => {
-      const avail = await checkOdooAvailable()
+      const expressAvail = await checkExpressAvailable()
+      let mode = expressAvail.available ? 'express' : 'local'
+      let version = null
+      if (!expressAvail.available) {
+        const avail = await checkOdooAvailable()
+        if (avail.available) { mode = 'odoo'; version = avail.version }
+      }
       setBackendStatus({
-        mode: avail.available ? 'odoo' : 'local',
-        odooVersion: avail.version,
+        mode,
+        odooVersion: version,
+        expressVersion: expressAvail.version,
+        expressTotals: expressAvail.totals,
         checked: true,
       })
       const stored = apiGetCurrentUser()
@@ -55,8 +63,8 @@ export const AuthProvider = ({ children }) => {
     return res
   }
 
-  const signOut = () => {
-    apiSignOut()
+  const signOut = async () => {
+    await apiSignOut()
     setCurrentUser(null)
   }
 

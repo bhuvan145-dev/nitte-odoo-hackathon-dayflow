@@ -8,8 +8,17 @@ const LEAVES_KEY = 'dayflow_leaves'
 const ATTENDANCE_KEY = 'dayflow_attendance'
 
 const USE_ODOO_KEY = 'dayflow_use_odoo'
+const USE_EXPRESS_KEY = 'dayflow_use_express'
+const EXPRESS_SESSION_KEY = 'dayflow_express_token'
 
 const useOdoo = () => localStorage.getItem(USE_ODOO_KEY) === 'true'
+const useExpress = () => localStorage.getItem(USE_EXPRESS_KEY) === 'true'
+
+const setExpressToken = (t) => {
+  if (t) localStorage.setItem(EXPRESS_SESSION_KEY, t)
+  else localStorage.removeItem(EXPRESS_SESSION_KEY)
+}
+const getExpressToken = () => localStorage.getItem(EXPRESS_SESSION_KEY) || null
 
 const ensureLocalSeed = () => {
   if (!localStorage.getItem(USERS_KEY)) {
@@ -24,6 +33,34 @@ const ensureLocalSeed = () => {
   }
 }
 
+const EXPRESS_BASE = '/api'
+
+const expressFetch = async (path, options = {}) => {
+  const opts = {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    credentials: 'include',
+    ...options,
+  }
+  const token = getExpressToken()
+  if (token) opts.headers['X-Session-Token'] = token
+  if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body)
+  const res = await fetch(`${EXPRESS_BASE}${path}`, opts)
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+  return res.json()
+}
+
+export const checkExpressAvailable = async () => {
+  try {
+    const r = await expressFetch('/status')
+    if (r && r.ok) {
+      localStorage.setItem(USE_EXPRESS_KEY, 'true')
+      return { available: true, mode: 'express', version: r.version, totals: r.totals }
+    }
+  } catch (_) {}
+  localStorage.setItem(USE_EXPRESS_KEY, 'false')
+  return { available: false, mode: 'local', version: null }
+}
+
 export const checkOdooAvailable = async () => {
   try {
     const v = await odooCommon.version()
@@ -36,7 +73,11 @@ export const checkOdooAvailable = async () => {
   return { available: false, version: null }
 }
 
-export const dataMode = () => useOdoo() ? 'odoo' : 'local'
+export const dataMode = () => {
+  if (useExpress()) return 'express'
+  if (useOdoo()) return 'odoo'
+  return 'local'
+}
 
 const fromOdooLeaveType = { paid: 'Paid Leave', sick: 'Sick Leave', unpaid: 'Unpaid Leave', casual: 'Casual Leave' }
 const toOdooLeaveType = { 'Paid Leave': 'paid', 'Sick Leave': 'sick', 'Unpaid Leave': 'unpaid', 'Casual Leave': 'casual' }
@@ -94,6 +135,19 @@ const mapUserToFrontend = (u, extra = {}) => ({
 /* ====================== AUTH ====================== */
 
 export const apiSignIn = async (email, password) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/auth/signin', { method: 'POST', body: { email, password } })
+      if (r.success) {
+        setExpressToken(r.token)
+        localStorage.setItem(AUTH_KEY, JSON.stringify(r.user))
+        return { success: true, user: r.user }
+      }
+      return { success: false, error: r.error || 'Login failed' }
+    } catch (e) {
+      localStorage.setItem(USE_EXPRESS_KEY, 'false')
+    }
+  }
   if (!useOdoo()) {
     ensureLocalSeed()
     const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
@@ -135,6 +189,14 @@ export const apiSignIn = async (email, password) => {
 }
 
 export const apiSignUp = async (data) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/auth/signup', { method: 'POST', body: data })
+      return r || { success: false, error: 'Sign up failed' }
+    } catch (e) {
+      localStorage.setItem(USE_EXPRESS_KEY, 'false')
+    }
+  }
   if (!useOdoo()) {
     ensureLocalSeed()
     const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
@@ -197,11 +259,26 @@ export const apiGetCurrentUser = () => {
   return raw ? JSON.parse(raw) : null
 }
 
-export const apiSignOut = () => {
+export const apiSignOut = async () => {
+  if (useExpress()) {
+    try {
+      await expressFetch('/auth/signout', { method: 'POST', body: { token: getExpressToken() } })
+    } catch (_) {}
+    setExpressToken(null)
+  }
   localStorage.removeItem(AUTH_KEY)
 }
 
-export const apiUpdateProfile = (updatedUser) => {
+export const apiUpdateProfile = async (updatedUser) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch(`/users/${updatedUser.id}/profile`, { method: 'PUT', body: updatedUser })
+      if (r) {
+        localStorage.setItem(AUTH_KEY, JSON.stringify(r))
+        return r
+      }
+    } catch (_) {}
+  }
   if (!useOdoo()) {
     ensureLocalSeed()
     const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]').map(u =>
@@ -224,6 +301,14 @@ export const apiUpdateProfile = (updatedUser) => {
 }
 
 export const apiGetAllUsers = async () => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/users')
+      if (Array.isArray(r)) return r
+    } catch (_) {
+      localStorage.setItem(USE_EXPRESS_KEY, 'false')
+    }
+  }
   if (!useOdoo()) {
     ensureLocalSeed()
     return JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
@@ -243,6 +328,12 @@ export const apiGetAllUsers = async () => {
 }
 
 export const apiUpdateEmployee = async (employeeId, updates) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch(`/users/${employeeId}`, { method: 'PUT', body: updates })
+      return r || null
+    } catch (_) {}
+  }
   if (!useOdoo()) {
     ensureLocalSeed()
     const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]').map(u =>
@@ -270,6 +361,14 @@ export const apiUpdateEmployee = async (employeeId, updates) => {
 /* ====================== LEAVES ====================== */
 
 export const apiGetLeaves = async () => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/leaves')
+      if (Array.isArray(r)) return r
+    } catch (_) {
+      localStorage.setItem(USE_EXPRESS_KEY, 'false')
+    }
+  }
   if (!useOdoo()) return JSON.parse(localStorage.getItem(LEAVES_KEY) || '[]')
   try {
     const cur = apiGetCurrentUser()
@@ -296,6 +395,12 @@ export const apiApplyLeave = async (leaveData, employeeId, employeeName) => {
     createdAt: new Date().toISOString().split('T')[0],
     ...leaveData,
   }
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/leaves', { method: 'POST', body: { ...leaveData, employeeId, employeeName } })
+      return r || newLocal
+    } catch (_) { localStorage.setItem(USE_EXPRESS_KEY, 'false') }
+  }
   if (!useOdoo()) {
     const all = [newLocal, ...JSON.parse(localStorage.getItem(LEAVES_KEY) || '[]')]
     localStorage.setItem(LEAVES_KEY, JSON.stringify(all))
@@ -320,6 +425,12 @@ export const apiApplyLeave = async (leaveData, employeeId, employeeName) => {
 }
 
 export const apiUpdateLeaveStatus = async (leaveId, status, comment = null) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch(`/leaves/${leaveId}/status`, { method: 'PUT', body: { status, comment } })
+      if (r) return r
+    } catch (_) {}
+  }
   if (!useOdoo()) {
     const all = JSON.parse(localStorage.getItem(LEAVES_KEY) || '[]').map(l =>
       l.id === leaveId ? { ...l, status, adminComments: comment || l.adminComments } : l
@@ -350,8 +461,8 @@ export const apiUpdateLeaveStatus = async (leaveId, status, comment = null) => {
 export const apiGetLeaveBalance = async (employeeId) => {
   if (!useOdoo()) {
     const balances = JSON.parse(JSON.stringify(leaveBalancesTemplate))
-    const approved = JSON.parse(localStorage.getItem(LEAVES_KEY) || '[]').filter(
-      l => l.employeeId === employeeId && l.status === 'Approved'
+    const approved = (await apiGetLeaves()).filter(
+      l => String(l.employeeId) === String(employeeId) && l.status === 'Approved'
     )
     approved.forEach(l => { if (balances[l.leaveType]) balances[l.leaveType].used += l.days })
     return balances
@@ -359,7 +470,7 @@ export const apiGetLeaveBalance = async (employeeId) => {
   try {
     const leaves = await apiGetLeaves()
     const balances = JSON.parse(JSON.stringify(leaveBalancesTemplate))
-    leaves.filter(l => l.employeeId === employeeId && l.status === 'Approved')
+    leaves.filter(l => String(l.employeeId) === String(employeeId) && l.status === 'Approved')
       .forEach(l => { if (balances[l.leaveType]) balances[l.leaveType].used += l.days })
     return balances
   } catch (_) { return JSON.parse(JSON.stringify(leaveBalancesTemplate)) }
@@ -368,6 +479,12 @@ export const apiGetLeaveBalance = async (employeeId) => {
 /* ====================== ATTENDANCE ====================== */
 
 export const apiGetAttendance = async () => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/attendance')
+      if (Array.isArray(r)) return r
+    } catch (_) { localStorage.setItem(USE_EXPRESS_KEY, 'false') }
+  }
   if (!useOdoo()) return JSON.parse(localStorage.getItem(ATTENDANCE_KEY) || '[]')
   try {
     const cur = apiGetCurrentUser()
@@ -397,9 +514,15 @@ const parseTime = (dateStr, timeStr) => {
 }
 
 export const apiCheckIn = async (employeeId, date, time) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/attendance/checkin', { method: 'POST', body: { employeeId, date, time } })
+      if (r) return r
+    } catch (_) {}
+  }
   if (!useOdoo()) {
     const all = JSON.parse(localStorage.getItem(ATTENDANCE_KEY) || '[]')
-    const existing = all.find(a => a.employeeId === employeeId && a.date === date)
+    const existing = all.find(a => String(a.employeeId) === String(employeeId) && a.date === date)
     if (existing) {
       existing.checkIn = time
       existing.status = 'Present'
@@ -425,9 +548,15 @@ export const apiCheckIn = async (employeeId, date, time) => {
 }
 
 export const apiCheckOut = async (employeeId, date, time) => {
+  if (useExpress()) {
+    try {
+      const r = await expressFetch('/attendance/checkout', { method: 'POST', body: { employeeId, date, time } })
+      if (r) return r
+    } catch (_) {}
+  }
   if (!useOdoo()) {
     const all = JSON.parse(localStorage.getItem(ATTENDANCE_KEY) || '[]')
-    const rec = all.find(a => a.employeeId === employeeId && a.date === date)
+    const rec = all.find(a => String(a.employeeId) === String(employeeId) && a.date === date)
     if (!rec) return null
     const ciD = new Date(`${rec.date} ${rec.checkIn}`)
     const coD = new Date(`${rec.date} ${time}`)
