@@ -47,50 +47,78 @@ const q = (sql) => {
 
 const exec = (sql) => { db.run(sql) }
 
-const userToFE = (u) => ({
-  id: String(u.id),
-  employeeId: u.employee_id,
-  name: u.name,
-  email: u.email,
-  password: u.password,
-  role: u.role,
-  phone: u.phone || '',
-  address: u.address || '',
-  dob: u.dob || '',
-  gender: u.gender || '',
-  department: u.department || (u.role === 'HR' ? 'Human Resources' : 'Engineering'),
-  designation: u.designation || (u.role === 'HR' ? 'HR Executive' : 'Software Engineer'),
-  joiningDate: u.joining_date,
-  salary: u.salary,
-  profilePicture: u.profile_picture || null,
-  createdAt: u.created_at,
-})
+const userToFE = (u) => {
+  if (!u) return null
+  return ({
+    id: String(u.id),
+    employeeId: u.employee_id,
+    name: u.name,
+    email: u.email,
+    password: u.password,
+    role: u.role,
+    phone: u.phone || '',
+    address: u.address || '',
+    dob: u.dob || '',
+    gender: u.gender || '',
+    department: u.department || (u.role === 'HR' ? 'Human Resources' : 'Engineering'),
+    designation: u.designation || (u.role === 'HR' ? 'HR Executive' : 'Software Engineer'),
+    joiningDate: u.joining_date,
+    salary: u.salary,
+    profilePicture: u.profile_picture || null,
+    createdAt: u.created_at,
+  })
+}
 
-const leaveToFE = (l) => ({
-  id: String(l.id),
-  employeeId: String(l.employee_id),
-  employeeName: l.employee_name,
-  leaveType: l.leave_type,
-  startDate: l.start_date,
-  endDate: l.end_date,
-  days: l.days,
-  remarks: l.remarks || '',
-  status: l.status,
-  adminComments: l.admin_comments,
-  createdAt: l.created_at,
-})
+const leaveToFE = (l) => {
+  if (!l) return null
+  return ({
+    id: String(l.id),
+    employeeId: String(l.employee_id),
+    employeeName: l.employee_name || getUserNameById(l.employee_id),
+    leaveType: l.leave_type,
+    startDate: l.start_date,
+    endDate: l.end_date,
+    days: l.days,
+    remarks: l.remarks || '',
+    status: l.status,
+    adminComments: l.admin_comments,
+    createdAt: l.created_at,
+  })
+}
 
-const attToFE = (a) => ({
-  id: String(a.id),
-  employeeId: String(a.employee_id),
-  date: a.date,
-  status: a.status,
-  checkIn: a.check_in,
-  checkOut: a.check_out,
-  hoursWorked: a.hours_worked,
-})
+const attToFE = (a) => {
+  if (!a) return null
+  return ({
+    id: String(a.id),
+    employeeId: String(a.employee_id),
+    date: a.date,
+    status: a.status,
+    checkIn: a.check_in,
+    checkOut: a.check_out,
+    hoursWorked: a.hours_worked,
+  })
+}
 
 const getLastId = () => q('SELECT last_insert_rowid() as id')[0].id
+
+const resolveUserId = (idOrEid) => {
+  if (idOrEid === null || idOrEid === undefined) return 0
+  const s = String(idOrEid)
+  const asNum = parseInt(s, 10)
+  if (!Number.isNaN(asNum) && String(asNum) === s.trim()) {
+    const byId = q(`SELECT id FROM users WHERE id = ${asNum} LIMIT 1`)[0]
+    if (byId) return byId.id
+  }
+  const byEid = q(`SELECT id FROM users WHERE UPPER(employee_id) = ${esc(s.toUpperCase())} LIMIT 1`)[0]
+  if (byEid) return byEid.id
+  return 0
+}
+
+const getUserNameById = (numId) => {
+  if (!numId) return ''
+  const r = q(`SELECT name FROM users WHERE id = ${numId} LIMIT 1`)[0]
+  return r?.name || ''
+}
 
 await loadDB()
 
@@ -259,7 +287,8 @@ app.get('/api/users', (req, res) => {
 })
 
 app.put('/api/users/:id/profile', (req, res) => {
-  const id = parseInt(req.params.id, 10) || 0
+  const id = resolveUserId(req.params.id)
+  if (!id) return res.json(null)
   const d = req.body || {}
   const cur = q(`SELECT * FROM users WHERE id = ${id}`)[0]
   if (!cur) return res.json(null)
@@ -269,7 +298,8 @@ app.put('/api/users/:id/profile', (req, res) => {
 })
 
 app.put('/api/users/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10) || 0
+  const id = resolveUserId(req.params.id)
+  if (!id) return res.json(null)
   const d = req.body || {}
   const cur = q(`SELECT * FROM users WHERE id = ${id}`)[0]
   if (!cur) return res.json(null)
@@ -279,7 +309,7 @@ app.put('/api/users/:id', (req, res) => {
 })
 
 app.get('/api/leaves', (req, res) => {
-  res.json(q('SELECT * FROM leave_requests ORDER BY created_at DESC, id DESC').map(leaveToFE))
+  res.json(q('SELECT * FROM leave_requests ORDER BY created_at DESC, id DESC').map(leaveToFE).filter(Boolean))
 })
 
 app.post('/api/leaves', (req, res) => {
@@ -287,11 +317,13 @@ app.post('/api/leaves', (req, res) => {
   const start = new Date(d.startDate)
   const end = new Date(d.endDate)
   const msPerDay = 86400000
-  const days = Math.max(1, Math.round(((end - start) / msPerDay) + 1))
+  const days = d.days ? Number(d.days) : Math.max(1, Math.round(((end - start) / msPerDay) + 1))
   const today = new Date().toISOString().split('T')[0]
-  const eid = parseInt(d.employeeId, 10) || 0
+  const eid = resolveUserId(d.employeeId)
+  if (!eid) return res.json({ success: false, error: 'Invalid employeeId' })
+  const empName = d.employeeName || getUserNameById(eid)
   exec(`INSERT INTO leave_requests (employee_id,employee_name,leave_type,start_date,end_date,days,remarks,status,created_at)
-    VALUES (${eid},${esc(d.employeeName||'')},${esc(d.leaveType||'Paid Leave')},${esc(d.startDate)},${esc(d.endDate)},${days},${esc(d.remarks||'')},'Pending',${esc(today)})`)
+    VALUES (${eid},${esc(empName)},${esc(d.leaveType||d.type||'Paid Leave')},${esc(d.startDate)},${esc(d.endDate)},${days},${esc(d.remarks||d.reason||'')},'Pending',${esc(today)})`)
   saveDB()
   const id = getLastId()
   res.json(leaveToFE(q(`SELECT * FROM leave_requests WHERE id = ${id}`)[0]))
@@ -312,12 +344,13 @@ app.put('/api/leaves/:id/status', (req, res) => {
 })
 
 app.get('/api/attendance', (req, res) => {
-  res.json(q('SELECT * FROM attendances ORDER BY date DESC, id DESC').map(attToFE))
+  res.json(q('SELECT * FROM attendances ORDER BY date DESC, id DESC').map(attToFE).filter(Boolean))
 })
 
 app.post('/api/attendance/checkin', (req, res) => {
   const { employeeId, date, time } = req.body || {}
-  const eid = parseInt(employeeId, 10) || 0
+  const eid = resolveUserId(employeeId)
+  if (!eid) return res.json(null)
   const existing = q(`SELECT * FROM attendances WHERE employee_id=${eid} AND date=${esc(date)}`)[0]
   if (existing) {
     exec(`UPDATE attendances SET check_in=${esc(time)}, status='Present' WHERE id=${existing.id}`)
@@ -332,7 +365,8 @@ app.post('/api/attendance/checkin', (req, res) => {
 
 app.post('/api/attendance/checkout', (req, res) => {
   const { employeeId, date, time } = req.body || {}
-  const eid = parseInt(employeeId, 10) || 0
+  const eid = resolveUserId(employeeId)
+  if (!eid) return res.json(null)
   const r = q(`SELECT * FROM attendances WHERE employee_id=${eid} AND date=${esc(date)}`)[0]
   if (!r) return res.json(null)
   const parseT = s => { if (!s) return 0; const [h,m] = s.split(':').map(Number); return h + (m||0)/60 }
