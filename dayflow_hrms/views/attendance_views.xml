@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_dayflow_attendance_list" model="ir.ui.view">
+        <field name="name">dayflow.attendance.list</field>
+        <field name="model">dayflow.attendance</field>
+        <field name="arch" type="xml">
+            <tree string="Attendance"
+                  decoration-success="status=='present'"
+                  decoration-danger="status=='absent'"
+                  decoration-warning="status=='half_day'"
+                  decoration-info="status=='leave'">
+                <field name="employee_id"/>
+                <field name="date"/>
+                <field name="check_in"/>
+                <field name="check_out"/>
+                <field name="worked_hours" sum="Total Hours"/>
+                <field name="status"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_dayflow_attendance_form" model="ir.ui.view">
+        <field name="name">dayflow.attendance.form</field>
+        <field name="model">dayflow.attendance</field>
+        <field name="arch" type="xml">
+            <form string="Attendance">
+                <header>
+                    <button name="action_check_in" type="object" string="Check In"
+                            class="btn-primary" invisible="check_in"/>
+                    <button name="action_check_out" type="object" string="Check Out"
+                            class="btn-primary" invisible="not check_in or check_out"/>
+                    <field name="status" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="employee_id"/>
+                            <field name="date"/>
+                        </group>
+                        <group>
+                            <field name="check_in"/>
+                            <field name="check_out"/>
+                            <field name="worked_hours"/>
+                        </group>
+                    </group>
+                    <field name="note" placeholder="Note..."/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_dayflow_attendance_search" model="ir.ui.view">
+        <field name="name">dayflow.attendance.search</field>
+        <field name="model">dayflow.attendance</field>
+        <field name="arch" type="xml">
+            <search string="Search Attendance">
+                <field name="employee_id"/>
+                <field name="date"/>
+                <filter string="Today" name="today"
+                        domain="[('date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="This Week" name="this_week"
+                        domain="[('date', '&gt;=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter string="Present" name="present" domain="[('status', '=', 'present')]"/>
+                <filter string="Absent" name="absent" domain="[('status', '=', 'absent')]"/>
+                <filter string="Half Day" name="half_day" domain="[('status', '=', 'half_day')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Employee" name="group_employee" context="{'group_by': 'employee_id'}"/>
+                    <filter string="Status" name="group_status" context="{'group_by': 'status'}"/>
+                    <filter string="Date" name="group_date" context="{'group_by': 'date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_dayflow_attendance_calendar" model="ir.ui.view">
+        <field name="name">dayflow.attendance.calendar</field>
+        <field name="model">dayflow.attendance</field>
+        <field name="arch" type="xml">
+            <calendar string="Attendance Week" date_start="date" mode="week"
+                      color="employee_id" event_open_popup="1">
+                <field name="employee_id"/>
+                <field name="status"/>
+                <field name="worked_hours"/>
+            </calendar>
+        </field>
+    </record>
+
+    <record id="view_dayflow_attendance_pivot" model="ir.ui.view">
+        <field name="name">dayflow.attendance.pivot</field>
+        <field name="model">dayflow.attendance</field>
+        <field name="arch" type="xml">
+            <pivot string="Weekly Attendance">
+                <field name="employee_id" type="row"/>
+                <field name="date" type="col" interval="week"/>
+                <field name="worked_hours" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="action_dayflow_attendance" model="ir.actions.act_window">
+        <field name="name">Attendance</field>
+        <field name="res_model">dayflow.attendance</field>
+        <field name="view_mode">tree,form,calendar,pivot</field>
+        <field name="context">{'search_default_this_week': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No attendance records yet. Check in to create today's record.
+            </p>
+        </field>
+    </record>
+
+</odoo>
